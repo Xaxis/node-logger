@@ -1,7 +1,14 @@
 import fs from 'fs'
 import fss from 'fs/promises'
 
-export default function Logger(prefix='', timestamp=true) {
+export default function Logger(
+    prefix = '',
+    timestamp = true,
+    excludeEnvs = ['development', 'staging'],
+    noLogToFile = false
+) {
+    // @ts-ignore
+    const env = process.env.NODE_ENV || ''
     const infoStream = loadLogStream("logs/info.txt")
     const warnStream = loadLogStream("logs/warn.txt")
     const errorStream = loadLogStream("logs/error.txt")
@@ -16,35 +23,46 @@ export default function Logger(prefix='', timestamp=true) {
     }
 
     async function writeToLog(logStream, message) {
-        const stream = await logStream
-        stream.write(message + "\n")
+        if (!checkExcludeEnv() && !noLogToFile) {
+            const stream = await logStream
+            stream.write(message + "\n")
+        }
     }
 
-    function buildPrefix() {
+    function checkExcludeEnv() {
+        return excludeEnvs.indexOf(env) !== -1
+    }
+
+    function buildPrefix(level) {
         let combo_prefix = prefix
-        if (timestamp) combo_prefix = `${new Date().toISOString()} ${prefix}`
+        if (timestamp) combo_prefix = `${new Date().toISOString()} ${prefix} ${level}`
         return combo_prefix
     }
 
+    function logOutput(level, msgPrefix, args) {
+        if (msgPrefix) {
+            console[level](msgPrefix, ...args)
+        } else {
+            console[level](...args)
+        }
+    }
+
     function log(...args) {
-        let message_prefix = buildPrefix()
-        let message = message_prefix + args
-        console.info(...[message_prefix, ...args])
-        writeToLog(infoStream, message)
+        let message_prefix = buildPrefix('INFO: ')
+        logOutput('info', message_prefix, args)
+        writeToLog(infoStream, message_prefix + args)
     }
 
-    async function warn(...args) {
-        let message_prefix = buildPrefix()
-        let message = message_prefix + args
-        console.info(...[message_prefix, ...args])
-        writeToLog(warnStream, message)
+    function warn(...args) {
+        let message_prefix = buildPrefix('WARN: ')
+        logOutput('warn', message_prefix, args)
+        writeToLog(warnStream, message_prefix + args)
     }
 
-    async function error(...args) {
-        let message_prefix = buildPrefix()
-        let message = message_prefix + new Error(args)
-        console.error(...[buildPrefix(), new Error(args)])
-        writeToLog(errorStream, message)
+    function error(...args) {
+        let message_prefix = buildPrefix('ERROR: ')
+        logOutput('error', message_prefix, args)
+        writeToLog(errorStream, message_prefix + args)
     }
 
     return {
